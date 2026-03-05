@@ -1,8 +1,10 @@
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
 using Google.Apis.Upload;
-using Google.Apis.Util.Store;
+using Newtonsoft.Json;
 
 namespace ModuloWeb.MANAGER
 {
@@ -22,42 +24,50 @@ namespace ModuloWeb.MANAGER
         {
             UserCredential credential;
 
-            // Intentar leer desde variable de entorno (Railway/producción)
-            string? jsonEnv = Environment.GetEnvironmentVariable("GOOGLE_OAUTH_JSON");
+            // Leer client_id y client_secret del JSON de credenciales
+            string oauthJson = Environment.GetEnvironmentVariable("GOOGLE_OAUTH_JSON")
+                ?? (File.Exists(_rutaCredenciales) ? File.ReadAllText(_rutaCredenciales) : null)
+                ?? throw new Exception("No se encontró GOOGLE_OAUTH_JSON ni el archivo de credenciales.");
 
-            if (!string.IsNullOrWhiteSpace(jsonEnv))
+            // Leer el token guardado
+            string? tokenJson = Environment.GetEnvironmentVariable("GOOGLE_TOKEN_JSON");
+            if (string.IsNullOrWhiteSpace(tokenJson))
             {
-                // Usar el JSON de la variable de entorno
-                using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(jsonEnv));
-                string tokenPath = Path.Combine(Path.GetTempPath(), "token_drive");
-                credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-                    GoogleClientSecrets.FromStream(stream).Secrets,
-                    Scopes,
-                    "user",
-                    CancellationToken.None,
-                    new FileDataStore(tokenPath, true)
-                );
-            }
-            else if (File.Exists(_rutaCredenciales))
-            {
-                // Usar archivo local (desarrollo en Windows)
-                using var stream = new FileStream(_rutaCredenciales, FileMode.Open, FileAccess.Read);
+                // Buscar token en archivo local
                 string tokenPath = Path.Combine(
-                    Path.GetDirectoryName(_rutaCredenciales)!, "token_drive");
-                credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-                    GoogleClientSecrets.FromStream(stream).Secrets,
-                    Scopes,
-                    "user",
-                    CancellationToken.None,
-                    new FileDataStore(tokenPath, true)
-                );
+                    Path.GetDirectoryName(_rutaCredenciales)!,
+                    "token_drive",
+                    "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user");
+                if (File.Exists(tokenPath))
+                    tokenJson = File.ReadAllText(tokenPath);
             }
-            else
+
+            if (string.IsNullOrWhiteSpace(tokenJson))
+                throw new Exception(
+                    "No se encontró el token de Drive. Configura GOOGLE_TOKEN_JSON en Railway.");
+
+            // Extraer client_id y client_secret del oauth JSON
+            dynamic oauthData = JsonConvert.DeserializeObject(oauthJson)!;
+            string clientId     = (string)oauthData.installed.client_id;
+            string clientSecret = (string)oauthData.installed.client_secret;
+
+            // Crear credencial desde el token guardado (sin abrir navegador)
+            var tokenResponse = JsonConvert.DeserializeObject<TokenResponse>(tokenJson)!;
+
+            var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
             {
-                throw new FileNotFoundException(
-                    $"Credenciales OAuth no encontradas en: {_rutaCredenciales}\n" +
-                    "Configura la variable GOOGLE_OAUTH_JSON en Railway.");
-            }
+                ClientSecrets = new ClientSecrets
+                {
+                    ClientId     = clientId,
+                    ClientSecret = clientSecret
+                },
+                Scopes = Scopes
+            });
+
+            credential = new UserCredential(flow, "user", tokenResponse);
+
+            // Refrescar el token si expiró
+            await credential.RefreshTokenAsync(CancellationToken.None);
 
             var service = new DriveService(new BaseClientService.Initializer
             {
