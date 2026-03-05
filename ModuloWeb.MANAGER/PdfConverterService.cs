@@ -2,15 +2,15 @@ using System.Diagnostics;
 
 namespace ModuloWeb.MANAGER
 {
-    /// <summary>
-    /// Convierte un archivo .xlsx a .pdf usando LibreOffice headless.
-    /// Requiere LibreOffice instalado: https://www.libreoffice.org/download/download/
-    /// </summary>
     public class PdfConverterService
     {
-        // Rutas típicas de LibreOffice en Windows
         private static readonly string[] _rutasCandidatas = new[]
         {
+            // Linux (Docker/Railway)
+            "/usr/bin/soffice",
+            "/usr/lib/libreoffice/program/soffice",
+            "/opt/libreoffice/program/soffice",
+            // Windows
             @"C:\Program Files\LibreOffice\program\soffice.exe",
             @"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
             @"C:\LibreOffice\program\soffice.exe",
@@ -23,10 +23,6 @@ namespace ModuloWeb.MANAGER
             return null;
         }
 
-        /// <summary>
-        /// Convierte xlsxPath a PDF en la misma carpeta.
-        /// Devuelve la ruta del PDF generado.
-        /// </summary>
         public static string ConvertirAPdf(string xlsxPath)
         {
             string? soffice = EncontrarLibreOffice();
@@ -40,17 +36,21 @@ namespace ModuloWeb.MANAGER
             var psi = new ProcessStartInfo
             {
                 FileName               = soffice,
-                Arguments              = $"--headless --convert-to pdf \"{xlsxPath}\" --outdir \"{carpeta}\"",
+                Arguments              = $"--headless --norestore --convert-to pdf \"{xlsxPath}\" --outdir \"{carpeta}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true,
                 UseShellExecute        = false,
                 CreateNoWindow         = true
             };
 
+            // Variables de entorno necesarias en Linux
+            psi.Environment["HOME"]   = "/tmp";
+            psi.Environment["TMPDIR"] = "/tmp";
+
             using var proc = Process.Start(psi)
                 ?? throw new Exception("No se pudo iniciar LibreOffice.");
 
-            proc.WaitForExit(60_000); // máximo 60 s
+            proc.WaitForExit(120_000);
 
             string pdfPath = Path.ChangeExtension(xlsxPath, ".pdf");
             if (!File.Exists(pdfPath))
