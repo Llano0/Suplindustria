@@ -10,6 +10,7 @@ namespace ModuloWeb.MANAGER
         public string Comprador       { get; set; } = "";
         public string EntregarA       { get; set; } = "";
         public string EntregarAlterno { get; set; } = "NA";
+        public string Observaciones   { get; set; } = "";
     }
 
     public class DetalleExcelDto
@@ -30,8 +31,8 @@ namespace ModuloWeb.MANAGER
     public class ExcelOrdenService
     {
         private readonly string _rutaPlantilla;
-        private const int IMG_W = 165; // 4.37 cm a 96 dpi
-        private const int IMG_H = 94;  // 2.50 cm a 96 dpi
+        private const int IMG_W = 165;
+        private const int IMG_H = 94;
 
         public ExcelOrdenService(string rutaPlantilla)
         {
@@ -50,9 +51,8 @@ namespace ModuloWeb.MANAGER
 
             FixImageSize(wb);
             LlenarInstancia(wb, idOrden, numeroOrden, proveedor, fecha, cabezal);
-            LlenarProductos(wb, detalles);
+            LlenarProductos(wb, detalles, cabezal.Observaciones);
 
-            // Ocultar todas las hojas excepto Hoja1 → el PDF solo mostrará la orden
             foreach (var hoja in wb.Worksheets)
                 if (hoja.Name != "Hoja1")
                     hoja.Visibility = XLWorksheetVisibility.Hidden;
@@ -62,21 +62,19 @@ namespace ModuloWeb.MANAGER
             return stream.ToArray();
         }
 
-        // ── Logo ─────────────────────────────────────────────────────────────
         private void FixImageSize(XLWorkbook wb)
         {
             foreach (var pic in wb.Worksheet("Hoja1").Pictures)
                 pic.WithSize(IMG_W, IMG_H);
         }
 
-        // ── Cabezal ──────────────────────────────────────────────────────────
         private void LlenarInstancia(
             XLWorkbook wb, int idOrden, string numeroOrden,
             Proveedor proveedor, DateTime fecha, OrdenExcelDto cab)
         {
             var ws = wb.Worksheet("Instancia");
 
-            ws.Cell("B2").Value = numeroOrden;          // Número de orden legible
+            ws.Cell("B2").Value = numeroOrden;
             ws.Cell("C2").Value = proveedor.Contacto;
             ws.Cell("D2").Value = proveedor.Correo;
             ws.Cell("E2").Value = fecha.ToString("dd/MM/yyyy");
@@ -93,8 +91,7 @@ namespace ModuloWeb.MANAGER
             ws.Cell("P2").Value = cab.Comprador;
         }
 
-        // ── Productos con bordes ──────────────────────────────────────────────
-        private void LlenarProductos(XLWorkbook wb, List<DetalleExcelDto> detalles)
+        private void LlenarProductos(XLWorkbook wb, List<DetalleExcelDto> detalles, string observaciones)
         {
             var ws = wb.Worksheet("Hoja1");
             const int FILA_BASE  = 19;
@@ -121,25 +118,50 @@ namespace ModuloWeb.MANAGER
                 ws.Cell(fila, 14).FormulaA1 =
                     $"=J{fila}*L{fila}*(1-(M{fila}/100))*(1+(I{fila}/100))";
 
-                // Formato números
                 ws.Cell(fila, 12).Style.NumberFormat.Format = "#,##0.00";
                 ws.Cell(fila, 14).Style.NumberFormat.Format = "#,##0.00";
                 ws.Cell(fila, 2).Style.Alignment.Horizontal  = XLAlignmentHorizontalValues.Center;
                 ws.Cell(fila, 10).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
-                // ── Bordes de la fila ───────────────────────────────────────
                 AplicarBordesFila(ws, fila, COL_INICIO, COL_FIN);
             }
 
             // Fila TOTAL
             int filaTot = FILA_BASE + detalles.Count;
+
+            // ── Fila inferior: Observaciones | Firma y sello | TOTAL ──
+            // Altura de la fila
+            ws.Row(filaTot).Height = 50;
+
+            // Sección 1: Observaciones (B hasta G)
+            var rangoObs = ws.Range(filaTot, COL_INICIO, filaTot, 7);
+            rangoObs.Merge();
+            rangoObs.Style.Alignment.WrapText = true;
+            rangoObs.Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
+            rangoObs.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            ws.Cell(filaTot, COL_INICIO).Value =
+                string.IsNullOrWhiteSpace(observaciones)
+                    ? "Observaciones:"
+                    : $"Observaciones: {observaciones}";
+            ws.Cell(filaTot, COL_INICIO).Style.Font.Italic = true;
+
+            // Sección 2: Firma y sello (H hasta J)
+            var rangoFirma = ws.Range(filaTot, 8, filaTot, 10);
+            rangoFirma.Merge();
+            rangoFirma.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            rangoFirma.Style.Alignment.Vertical   = XLAlignmentVerticalValues.Top;
+            rangoFirma.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            ws.Cell(filaTot, 8).Value = "Firma y sello";
+            ws.Cell(filaTot, 8).Style.Font.Bold = true;
+
+            // TOTAL a la derecha (M y N)
             ws.Cell(filaTot, 13).Value = "TOTAL:";
             ws.Cell(filaTot, 13).Style.Font.Bold = true;
             ws.Cell(filaTot, 14).FormulaA1 = $"=SUM(N{FILA_BASE}:N{filaTot - 1})";
             ws.Cell(filaTot, 14).Style.NumberFormat.Format = "#,##0.00";
             ws.Cell(filaTot, 14).Style.Font.Bold = true;
 
-            // Borde alrededor del bloque completo (cabezal fila 18 + datos)
+            // Borde tabla completa
             var rangoTabla = ws.Range(18, COL_INICIO, filaTot, COL_FIN);
             rangoTabla.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
         }

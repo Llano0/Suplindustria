@@ -43,8 +43,23 @@ namespace ModuloWeb.MANAGER
             }
 
             if (string.IsNullOrWhiteSpace(tokenJson))
-                throw new Exception(
-                    "No se encontró el token de Drive. Configura GOOGLE_TOKEN_JSON en Railway.");
+{
+    // No hay token guardado → abrir navegador para autorizar (solo funciona local)
+    string tokenDir = Path.Combine(
+        Path.GetDirectoryName(_rutaCredenciales)!, "token_drive");
+    using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(oauthJson));
+    var cred = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+        GoogleClientSecrets.FromStream(stream).Secrets,
+        Scopes,
+        "user",
+        CancellationToken.None,
+        new Google.Apis.Util.Store.FileDataStore(tokenDir, true)
+    );
+    // Leer el token recién guardado
+    string tokenFile = Path.Combine(tokenDir,
+        "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user");
+    tokenJson = File.ReadAllText(tokenFile);
+}
 
             // Extraer client_id y client_secret del oauth JSON
             dynamic oauthData = JsonConvert.DeserializeObject(oauthJson)!;

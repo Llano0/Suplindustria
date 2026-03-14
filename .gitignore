@@ -1,4 +1,4 @@
-bin/
+git rm -r --cached ModuloWeb1/credenciales/bin/
 obj/
 credenciales/
-Ordenes/
+Ordenes/git remote set-url origin https://github.com/Llano0/Suplindustria

@@ -10,6 +10,7 @@ namespace ModuloWeb1.Models
         public string Comprador     { get; set; } = "";
         public string EntregarA     { get; set; } = "SUPLINDUSTRIA S.A.S.";
         public string EntregarAlterno { get; set; } = "NA";
+        public string Observaciones { get; set; } = "";
 
         public List<DetalleProductoViewModel> Productos { get; set; } = new();
     }

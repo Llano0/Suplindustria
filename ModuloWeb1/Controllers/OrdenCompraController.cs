@@ -17,29 +17,75 @@ namespace ModuloWeb1.Controllers
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Plantillas", "PlantillaOrdenes.xlsx");
 
         private string RutaCredenciales =>
-    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Credenciales", "oauth-client.json");
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Credenciales", "oauth-client.json");
 
         // ── Helpers ──────────────────────────────────────────────────────────
 
-        /// Genera el número de orden: PrimerPalabra-Consecutivo  (ej: "Suministros-0")
         private string GenerarNumeroOrden(string nombreProveedor, int consecutivo)
         {
-            // Tomar la primera palabra (separador: espacio, guión bajo, guión)
             string primera = Regex.Split(nombreProveedor.Trim(), @"[\s_\-]+")[0];
-            // Limpiar caracteres no alfanuméricos
             primera = Regex.Replace(primera, @"[^a-zA-Z0-9]", "");
             if (string.IsNullOrEmpty(primera)) primera = "ORD";
             return $"{primera}-{consecutivo}";
         }
 
-        // ── GET: Formulario ──────────────────────────────────────────────────
+        private byte[] GenerarExcelBytes(int idOrden, string numeroOrden,
+            Proveedor proveedor, DateTime fecha, OrdenCompraViewModel model)
+        {
+            var cabezalDto = new OrdenExcelDto
+            {
+                Condiciones     = model.Condiciones    ?? "",
+                Moneda          = model.Moneda         ?? "COP",
+                Comprador       = model.Comprador      ?? "",
+                EntregarA       = model.EntregarA      ?? "SUPLINDUSTRIA S.A.S.",
+                EntregarAlterno = model.EntregarAlterno ?? "NA",
+                Observaciones   = model.Observaciones  ?? ""
+            };
+
+            var detallesDto = model.Productos
+                .Where(p => p.Cantidad > 0 && p.PrecioUnitario > 0)
+                .Select(p => new DetalleExcelDto
+                {
+                    NombreManual   = p.NombreManual   ?? "",
+                    Item           = p.Item           ?? "",
+                    Catalogo       = p.Catalogo       ?? "",
+                    Modelo         = p.Modelo         ?? "",
+                    Descripcion    = p.Descripcion    ?? "",
+                    FechaEntrega   = p.FechaEntrega   ?? "",
+                    Iva            = p.Iva,
+                    Cantidad       = p.Cantidad,
+                    Um             = p.Um             ?? "UND",
+                    PrecioUnitario = p.PrecioUnitario,
+                    Descuento      = p.Descuento
+                }).ToList();
+
+            var excelService = new ExcelOrdenService(RutaPlantilla);
+            return excelService.GenerarExcel(idOrden, numeroOrden, proveedor, fecha, cabezalDto, detallesDto);
+        }
+
+        private string SubirDrive(string pdfPath, string nombreArchivo)
+        {
+            try
+            {
+                var driveService = new GoogleDriveService(RutaCredenciales);
+                return driveService.SubirPdfAsync(pdfPath, nombreArchivo)
+                    .GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                ViewBag.WarningDrive = $"⚠️ PDF generado pero no se pudo subir a Drive: {ex.Message}";
+                return "";
+            }
+        }
+
+        // ── GET: Crear ───────────────────────────────────────────────────────
         public IActionResult Crear()
         {
             ViewBag.Proveedores = broker.ObtenerProveedores();
             return View();
         }
 
-        // ── POST: Crear orden ────────────────────────────────────────────────
+        // ── POST: Crear ──────────────────────────────────────────────────────
         [HttpPost]
         public IActionResult Crear([FromForm] string datosOrden)
         {
@@ -55,88 +101,49 @@ namespace ModuloWeb1.Controllers
                     return View();
                 }
 
-                // Calcular total
                 decimal total = model.Productos
                     .Where(p => p.Cantidad > 0 && p.PrecioUnitario > 0)
                     .Sum(p => p.Cantidad * p.PrecioUnitario
                               * (1 - p.Descuento / 100)
                               * (1 + p.Iva / 100));
 
-                // ── 1. Número de orden consecutivo por proveedor ──────────────
                 int consecutivo = broker.ContarOrdenesPorProveedor(model.IdProveedor);
                 var proveedor   = broker.ObtenerProveedorPorId(model.IdProveedor)
                     ?? new Proveedor { Nombre = "SinProveedor" };
                 string numeroOrden = GenerarNumeroOrden(proveedor.Nombre, consecutivo);
 
-                // ── 2. Guardar en BD (método existente del Manager) ───────────
-                var detallesBD = model.Productos
-                    .Where(p => p.Cantidad > 0 && p.PrecioUnitario > 0)
-                    .Select(p => ((int?)null, p.NombreManual, p.Cantidad, p.PrecioUnitario))
-                    .ToList();
+                // Guardar orden
+                int idOrden = broker.InsertarOrden(
+                    model.IdProveedor, total,
+                    model.Condiciones    ?? "",
+                    model.Moneda         ?? "COP",
+                    model.Comprador      ?? "",
+                    model.EntregarA      ?? "SUPLINDUSTRIA S.A.S.",
+                    model.EntregarAlterno ?? "NA",
+                    model.Observaciones  ?? "");
 
-                int idOrden = manager.CrearOrdenConPDF(
-                    model.IdProveedor, total, model.Condiciones, detallesBD);
-
-                // Persistir el número de orden legible
                 broker.GuardarNumeroOrden(idOrden, numeroOrden);
 
-                // ── 3. Generar Excel ──────────────────────────────────────────
-                var cabezalDto = new OrdenExcelDto
-                {
-                    Condiciones     = model.Condiciones    ?? "",
-                    Moneda          = model.Moneda         ?? "COP",
-                    Comprador       = model.Comprador      ?? "",
-                    EntregarA       = model.EntregarA      ?? "SUPLINDUSTRIA S.A.S.",
-                    EntregarAlterno = model.EntregarAlterno ?? "NA"
-                };
+                // Guardar detalles completos
+                foreach (var p in model.Productos.Where(p => p.Cantidad > 0 && p.PrecioUnitario > 0))
+                    broker.InsertarDetalleCompleto(idOrden,
+                        p.NombreManual ?? "", p.Item ?? "", p.Catalogo ?? "",
+                        p.Modelo ?? "", p.Descripcion ?? "", p.FechaEntrega ?? "",
+                        p.Iva, p.Cantidad, p.Um ?? "UND", p.PrecioUnitario, p.Descuento);
 
-                var detallesDto = model.Productos
-                    .Where(p => p.Cantidad > 0 && p.PrecioUnitario > 0)
-                    .Select(p => new DetalleExcelDto
-                    {
-                        NombreManual   = p.NombreManual   ?? "",
-                        Item           = p.Item           ?? "",
-                        Catalogo       = p.Catalogo       ?? "",
-                        Modelo         = p.Modelo         ?? "",
-                        Descripcion    = p.Descripcion    ?? "",
-                        FechaEntrega   = p.FechaEntrega   ?? "",
-                        Iva            = p.Iva,
-                        Cantidad       = p.Cantidad,
-                        Um             = p.Um             ?? "UND",
-                        PrecioUnitario = p.PrecioUnitario,
-                        Descuento      = p.Descuento
-                    }).ToList();
-
-                var excelService = new ExcelOrdenService(RutaPlantilla);
-                byte[] excelBytes = excelService.GenerarExcel(
-                    idOrden, numeroOrden, proveedor, DateTime.Now, cabezalDto, detallesDto);
-
+                // Generar Excel y PDF
+                byte[] excelBytes = GenerarExcelBytes(idOrden, numeroOrden, proveedor, DateTime.Now, model);
                 string carpeta    = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Ordenes");
                 string xlsxPath   = Path.Combine(carpeta, $"{numeroOrden}.xlsx");
                 Directory.CreateDirectory(carpeta);
                 System.IO.File.WriteAllBytes(xlsxPath, excelBytes);
 
-                // ── 4. Convertir a PDF ────────────────────────────────────────
-                string pdfPath = PdfConverterService.ConvertirAPdf(xlsxPath);
+                string pdfPath  = PdfConverterService.ConvertirAPdf(xlsxPath);
+                string driveLink = SubirDrive(pdfPath, $"{numeroOrden}.pdf");
 
-                // ── 5. Subir PDF a Google Drive ───────────────────────────────
-                string driveLink = "";
-                try
-                {
-                    var driveService = new GoogleDriveService(RutaCredenciales);
-                    driveLink = driveService.SubirPdfAsync(
-                        pdfPath, $"{numeroOrden}.pdf").GetAwaiter().GetResult();
-                }
-                catch (Exception exDrive)
-                {
-                    // No bloquear si Drive falla; solo notificar
-                    ViewBag.WarningDrive = $"⚠️ PDF generado pero no se pudo subir a Drive: {exDrive.Message}";
-                }
-
-                ViewBag.Mensaje    = $"✅ Orden {numeroOrden} creada. Total: ${total:N2}";
-                ViewBag.IdOrden    = idOrden;
-                ViewBag.NumOrden   = numeroOrden;
-                ViewBag.DriveLink  = driveLink;
+                ViewBag.Mensaje   = $"✅ Orden {numeroOrden} creada. Total: ${total:N2}";
+                ViewBag.NumOrden  = numeroOrden;
+                ViewBag.DriveLink = driveLink;
             }
             catch (Exception ex)
             {
@@ -145,6 +152,144 @@ namespace ModuloWeb1.Controllers
 
             ViewBag.Proveedores = broker.ObtenerProveedores();
             return View();
+        }
+
+        // ── GET: Editar ──────────────────────────────────────────────────────
+        public IActionResult Editar(int id)
+        {
+            var orden    = broker.ObtenerOrdenPorId(id);
+            var detalles = broker.ObtenerDetallesPorOrden(id);
+
+            if (orden == null) return NotFound();
+
+            var model = new OrdenCompraViewModel
+            {
+                IdProveedor     = orden.IdProveedor,
+                Condiciones     = orden.Condiciones,
+                Moneda          = orden.Moneda,
+                Comprador       = orden.Comprador,
+                EntregarA       = orden.EntregarA,
+                EntregarAlterno = orden.EntregarAlterno,
+                Observaciones   = orden.Observaciones,
+                Productos       = detalles.Select(d => new DetalleProductoViewModel
+                {
+                    NombreManual   = d.NombreProductoManual,
+                    Item           = d.Item,
+                    Catalogo       = d.Catalogo,
+                    Modelo         = d.Modelo,
+                    Descripcion    = d.Descripcion,
+                    FechaEntrega   = d.FechaEntrega,
+                    Iva            = d.Iva,
+                    Cantidad       = d.Cantidad,
+                    Um             = d.Um,
+                    PrecioUnitario = d.Precio,
+                    Descuento      = d.Descuento
+                }).ToList()
+            };
+
+            ViewBag.Proveedores  = broker.ObtenerProveedores();
+            ViewBag.IdOrden      = id;
+            ViewBag.NumeroOrden  = orden.NumeroOrden;
+            ViewBag.FechaOriginal = orden.Fecha;
+            return View(model);
+        }
+
+        // ── POST: Editar ─────────────────────────────────────────────────────
+        [HttpPost]
+        public IActionResult Editar(int id, [FromForm] string datosOrden)
+        {
+            try
+            {
+                var model = JsonSerializer.Deserialize<OrdenCompraViewModel>(datosOrden,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (model == null || !model.Productos.Any())
+                {
+                    ViewBag.Error = "⚠️ Debe agregar al menos un producto";
+                    ViewBag.Proveedores = broker.ObtenerProveedores();
+                    ViewBag.IdOrden = id;
+                    return View(model);
+                }
+
+                decimal total = model.Productos
+                    .Where(p => p.Cantidad > 0 && p.PrecioUnitario > 0)
+                    .Sum(p => p.Cantidad * p.PrecioUnitario
+                              * (1 - p.Descuento / 100)
+                              * (1 + p.Iva / 100));
+
+                // Obtener orden original para mantener numero_orden y fecha
+                var ordenOriginal = broker.ObtenerOrdenPorId(id)!;
+                var proveedor     = broker.ObtenerProveedorPorId(model.IdProveedor)
+                    ?? new Proveedor { Nombre = "SinProveedor" };
+
+                // Actualizar orden
+                broker.ActualizarOrden(id, model.IdProveedor, total,
+                    model.Condiciones    ?? "",
+                    model.Moneda         ?? "COP",
+                    model.Comprador      ?? "",
+                    model.EntregarA      ?? "SUPLINDUSTRIA S.A.S.",
+                    model.EntregarAlterno ?? "NA",
+                    model.Observaciones  ?? "");
+
+                // Reemplazar detalles
+                broker.EliminarDetalles(id);
+                foreach (var p in model.Productos.Where(p => p.Cantidad > 0 && p.PrecioUnitario > 0))
+                    broker.InsertarDetalleCompleto(id,
+                        p.NombreManual ?? "", p.Item ?? "", p.Catalogo ?? "",
+                        p.Modelo ?? "", p.Descripcion ?? "", p.FechaEntrega ?? "",
+                        p.Iva, p.Cantidad, p.Um ?? "UND", p.PrecioUnitario, p.Descuento);
+
+                // Regenerar Excel y PDF con el mismo numero_orden
+                string numeroOrden = ordenOriginal.NumeroOrden;
+                byte[] excelBytes  = GenerarExcelBytes(id, numeroOrden, proveedor, ordenOriginal.Fecha, model);
+                string carpeta     = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Ordenes");
+                string xlsxPath    = Path.Combine(carpeta, $"{numeroOrden}.xlsx");
+                Directory.CreateDirectory(carpeta);
+                System.IO.File.WriteAllBytes(xlsxPath, excelBytes);
+
+                string pdfPath   = PdfConverterService.ConvertirAPdf(xlsxPath);
+                string driveLink = SubirDrive(pdfPath, $"{numeroOrden}.pdf");
+
+                ViewBag.Mensaje   = $"✅ Orden {numeroOrden} actualizada. Total: ${total:N2}";
+                ViewBag.NumOrden  = numeroOrden;
+                ViewBag.DriveLink = driveLink;
+                ViewBag.IdOrden   = id;
+                ViewBag.NumeroOrden = numeroOrden;
+            }
+            catch (Exception ex)
+            {
+                ViewBag.Error = $"❌ Error: {ex.Message}";
+                ViewBag.IdOrden = id;
+            }
+
+            ViewBag.Proveedores = broker.ObtenerProveedores();
+            var ordenAct = broker.ObtenerOrdenPorId(id);
+            var detallesAct = broker.ObtenerDetallesPorOrden(id);
+            var modelReturn = new OrdenCompraViewModel
+            {
+                IdProveedor     = ordenAct?.IdProveedor ?? 0,
+                Condiciones     = ordenAct?.Condiciones ?? "",
+                Moneda          = ordenAct?.Moneda ?? "COP",
+                Comprador       = ordenAct?.Comprador ?? "",
+                EntregarA       = ordenAct?.EntregarA ?? "",
+                EntregarAlterno = ordenAct?.EntregarAlterno ?? "NA",
+                Observaciones   = ordenAct?.Observaciones ?? "",
+                Productos       = detallesAct.Select(d => new DetalleProductoViewModel
+                {
+                    NombreManual   = d.NombreProductoManual,
+                    Item           = d.Item,
+                    Catalogo       = d.Catalogo,
+                    Modelo         = d.Modelo,
+                    Descripcion    = d.Descripcion,
+                    FechaEntrega   = d.FechaEntrega,
+                    Iva            = d.Iva,
+                    Cantidad       = d.Cantidad,
+                    Um             = d.Um,
+                    PrecioUnitario = d.Precio,
+                    Descuento      = d.Descuento
+                }).ToList()
+            };
+            return View(modelReturn);
         }
 
         // ── POST: Crear proveedor (AJAX) ─────────────────────────────────────
@@ -167,16 +312,16 @@ namespace ModuloWeb1.Controllers
                     Contacto  = vm.Contacto?.Trim()   ?? ""
                 };
 
-                int id = broker.InsertarProveedor(p);
+                int newId = broker.InsertarProveedor(p);
                 return Ok(new {
-                    id, nombre=p.Nombre, nit=p.Nit, direccion=p.Direccion,
+                    id=newId, nombre=p.Nombre, nit=p.Nit, direccion=p.Direccion,
                     telefono=p.Telefono, ciudad=p.Ciudad, contacto=p.Contacto, correo=p.Correo
                 });
             }
             catch (Exception ex) { return BadRequest(ex.Message); }
         }
 
-        // ── DELETE: Eliminar proveedor (AJAX) ────────────────────────────────
+        // ── POST: Eliminar proveedor (AJAX) ──────────────────────────────────
         [HttpPost]
         public IActionResult EliminarProveedor([FromBody] int id)
         {
@@ -190,48 +335,14 @@ namespace ModuloWeb1.Controllers
             catch (Exception ex) { return BadRequest(ex.Message); }
         }
 
-        // ── GET: Lista de órdenes ────────────────────────────────────────────
+        // ── GET: Lista ───────────────────────────────────────────────────────
         public IActionResult Lista()
         {
             var ordenes = broker.ObtenerOrdenes();
             return View(ordenes);
         }
 
-        // ── GET: Descargar PDF ───────────────────────────────────────────────
-        public IActionResult DescargarExcel(int id)
-        {
-            try
-            {
-                // Buscar por id (nombre de archivo puede variar, buscar el xlsx)
-                string carpeta = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Ordenes");
-                // Intentar pdf primero, luego xlsx
-                string[] pdfs = Directory.GetFiles(carpeta, "*.pdf")
-                    .Where(f => Path.GetFileNameWithoutExtension(f).Contains($"-"))
-                    .ToArray();
-
-                // Fallback: buscar por nombre numérico antiguo
-                string xlsxFallback = Path.Combine(carpeta, $"Orden_{id}.xlsx");
-                string pdfFallback  = Path.Combine(carpeta, $"Orden_{id}.pdf");
-
-                // Buscar PDF del consecutivo (guardado con numero_orden como nombre)
-                string? archivo = pdfs.FirstOrDefault()  // simplificado: mejorar si se quiere por id
-                    ?? (System.IO.File.Exists(pdfFallback) ? pdfFallback : null)
-                    ?? (System.IO.File.Exists(xlsxFallback) ? xlsxFallback : null);
-
-                if (archivo == null) return NotFound("Archivo no encontrado.");
-
-                bool esPdf = archivo.EndsWith(".pdf");
-                byte[] bytes = System.IO.File.ReadAllBytes(archivo);
-                string mime  = esPdf
-                    ? "application/pdf"
-                    : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
-                return File(bytes, mime, Path.GetFileName(archivo));
-            }
-            catch (Exception ex) { return BadRequest($"Error: {ex.Message}"); }
-        }
-
-        // ── GET: Descargar por nombre de orden ───────────────────────────────
+        // ── GET: Descargar por número ────────────────────────────────────────
         public IActionResult DescargarPorNumero(string numero)
         {
             try

@@ -1,35 +1,57 @@
 @model List<ModuloWeb.ENTITIES.OrdenCompra>
-
 @{
-    ViewData["Title"] = "Listado de Órdenes de Compra";
+    ViewData["Title"] = "Órdenes de Compra";
 }
 
-<div class="container mt-4">
+<div class="container-fluid mt-4 px-4">
     <div class="card shadow-lg p-4">
-        <h2 class="text-center text-primary mb-4">Listado de Órdenes de Compra</h2>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="text-primary mb-0">📋 Órdenes de Compra</h2>
+            <a href="@Url.Action("Crear")" class="btn btn-success">➕ Nueva Orden</a>
+        </div>
 
-        <table class="table table-bordered table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>ID Orden</th>
-                    <th>ID Proveedor</th>
-                    <th>Total</th>
-                    <th>Fecha</th>
-                    <th>Estado</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var orden in Model)
-                {
-                    <tr>
-                        <td>@orden.IdOrden</td>
-                        <td>@orden.IdProveedor</td>
-                        <td>$@orden.Total</td>
-                        <td>@orden.Fecha.ToString("dd/MM/yyyy")</td>
-                        <td>@orden.Estado</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        @if (!Model.Any())
+        {
+            <div class="alert alert-info">No hay órdenes registradas aún.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>N° Orden</th>
+                            <th>Proveedor</th>
+                            <th>Fecha</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var o in Model)
+                        {
+                            <tr>
+                                <td><strong>@o.NumeroOrden</strong></td>
+                                <td>@o.NombreProveedor</td>
+                                <td>@o.Fecha.ToString("dd/MM/yyyy")</td>
+                                <td>$@o.Total.ToString("N2")</td>
+                                <td><span class="badge bg-warning text-dark">@o.Estado</span></td>
+                                <td class="text-center">
+                                    <a href="@Url.Action("DescargarPorNumero", new { numero = o.NumeroOrden })"
+                                       class="btn btn-sm btn-success" title="Descargar PDF">
+                                        📥 PDF
+                                    </a>
+                                    <a href="@Url.Action("Editar", new { id = o.IdOrden })"
+                                       class="btn btn-sm btn-warning ms-1" title="Editar orden">
+                                        ✏️ Editar
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     </div>
 </div>

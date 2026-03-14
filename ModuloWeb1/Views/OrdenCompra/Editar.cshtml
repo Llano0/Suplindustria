@@ -1,0 +1,296 @@
+@model ModuloWeb1.Models.OrdenCompraViewModel
+@{
+    ViewData["Title"] = $"Editar Orden {ViewBag.NumeroOrden}";
+    int idOrden = ViewBag.IdOrden;
+    string numOrden = ViewBag.NumeroOrden ?? "";
+}
+
+<div class="container-fluid mt-4 px-4">
+    <div class="card shadow-lg p-4">
+        <h2 class="text-center text-warning mb-1">✏️ Editar Orden de Compra</h2>
+        <p class="text-center text-muted mb-4">
+            <strong>@numOrden</strong> — el consecutivo se mantiene igual
+        </p>
+
+        @if (ViewBag.Mensaje != null)
+        {
+            <div class="alert alert-success">
+                <strong>@ViewBag.Mensaje</strong>
+                @if (ViewBag.NumOrden != null)
+                {
+                    <br />
+                    <a href="@Url.Action("DescargarPorNumero", new { numero = ViewBag.NumOrden })"
+                       class="btn btn-sm btn-success mt-2">📥 Descargar PDF</a>
+                    @if (!string.IsNullOrEmpty(ViewBag.DriveLink as string))
+                    {
+                        <a href="@ViewBag.DriveLink" target="_blank"
+                           class="btn btn-sm btn-primary mt-2 ms-2">☁️ Ver en Drive</a>
+                    }
+                }
+            </div>
+        }
+        @if (ViewBag.WarningDrive != null)
+        {
+            <div class="alert alert-warning">@ViewBag.WarningDrive</div>
+        }
+        @if (ViewBag.Error != null)
+        {
+            <div class="alert alert-danger"><strong>@ViewBag.Error</strong></div>
+        }
+
+        <form id="formOrden" method="post" action="@Url.Action("Editar", new { id = idOrden })">
+            <input type="hidden" name="datosOrden" id="datosOrden" />
+
+            <!-- ════ CABEZAL ════ -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Proveedor *</label>
+                    <select id="proveedorSelect" class="form-select" required>
+                        <option value="">Seleccione un proveedor...</option>
+                        @foreach (var p in ViewBag.Proveedores)
+                        {
+                        @if (p.Id == Model.IdProveedor)
+                        {
+                            <option value="@p.Id" selected
+                                    data-nombre="@p.Nombre" data-nit="@p.Nit"
+                                    data-direccion="@p.Direccion" data-telefono="@p.Telefono"
+                                    data-ciudad="@p.Ciudad" data-contacto="@p.Contacto"
+                                    data-correo="@p.Correo">
+                                @p.Nombre
+                            </option>
+                        }
+                        else
+                        {
+                            <option value="@p.Id"
+                                    data-nombre="@p.Nombre" data-nit="@p.Nit"
+                                    data-direccion="@p.Direccion" data-telefono="@p.Telefono"
+                                    data-ciudad="@p.Ciudad" data-contacto="@p.Contacto"
+                                    data-correo="@p.Correo">
+                                @p.Nombre
+                            </option>
+                        }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Condiciones pago</label>
+                    <input type="text" id="condiciones" class="form-control" value="@Model.Condiciones" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Moneda</label>
+                    <input type="text" id="moneda" class="form-control" value="@Model.Moneda" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Comprador</label>
+                    <input type="text" id="comprador" class="form-control" value="@Model.Comprador" placeholder="Nombre del comprador" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Entregar a (principal)</label>
+                    <input type="text" id="entregarA" class="form-control" value="@Model.EntregarA" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Entregar a (alterno)</label>
+                    <input type="text" id="entregarAlterno" class="form-control" value="@Model.EntregarAlterno" />
+                </div>
+            </div>
+
+            <hr />
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="text-secondary mb-0">🛒 Productos</h5>
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="agregarFila()">
+                    ➕ Agregar producto
+                </button>
+            </div>
+
+            <!-- ════ TABLA PRODUCTOS ════ -->
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm align-middle"
+                       id="tablaProductos" style="font-size:0.82rem; min-width:1400px;">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width:40px" class="text-center">Ln</th>
+                            <th style="width:140px">Descripción *</th>
+                            <th style="width:90px">Item</th>
+                            <th style="width:90px">Catálogo</th>
+                            <th style="width:90px">Modelo</th>
+                            <th style="width:110px">F. Entrega</th>
+                            <th style="width:60px">%IVA</th>
+                            <th style="width:70px">Cantidad *</th>
+                            <th style="width:70px">UM</th>
+                            <th style="width:110px">Precio Unit. *</th>
+                            <th style="width:65px">% Desc.</th>
+                            <th style="width:110px">Valor Total</th>
+                            <th style="width:40px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="productosBody">
+                        @foreach (var prod in Model.Productos)
+                        {
+                            <tr class="fila-producto">
+                                <td class="text-center numero-fila"></td>
+                                <td><input type="text"   class="form-control form-control-sm descripcion" value="@prod.NombreManual" /></td>
+                                <td><input type="text"   class="form-control form-control-sm item"        value="@prod.Item" /></td>
+                                <td><input type="text"   class="form-control form-control-sm catalogo"    value="@prod.Catalogo" /></td>
+                                <td><input type="text"   class="form-control form-control-sm modelo"      value="@prod.Modelo" /></td>
+                                <td><input type="date"   class="form-control form-control-sm fecha-entrega" value="@prod.FechaEntrega" /></td>
+                                <td><input type="number" class="form-control form-control-sm iva"         value="@prod.Iva" min="0" max="100" step="0.1" onchange="calcularSubtotal(this)" /></td>
+                                <td><input type="number" class="form-control form-control-sm cantidad"    value="@prod.Cantidad" min="1" onchange="calcularSubtotal(this)" /></td>
+                                <td><input type="text"   class="form-control form-control-sm um"          value="@prod.Um" /></td>
+                                <td><input type="number" class="form-control form-control-sm precio"      value="@prod.PrecioUnitario" min="0" step="0.01" onchange="calcularSubtotal(this)" /></td>
+                                <td><input type="number" class="form-control form-control-sm descuento"   value="@prod.Descuento" min="0" max="100" step="0.1" onchange="calcularSubtotal(this)" /></td>
+                                <td class="text-end fw-bold subtotal">$0.00</td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="eliminarFila(this)">✕</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-secondary">
+                            <td colspan="11" class="text-end fw-bold">TOTAL:</td>
+                            <td class="text-end fw-bold" id="totalGeneral">$0.00</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- ════ OBSERVACIONES ════ -->
+            <div class="row mt-3 mb-3">
+                <div class="col-12">
+                    <label class="form-label fw-bold">Observaciones</label>
+                    <textarea id="observaciones" class="form-control" rows="2">@Model.Observaciones</textarea>
+                </div>
+            </div>
+
+            <div class="text-center mt-3">
+                <button type="button" class="btn btn-warning btn-lg px-5" onclick="guardarOrden()">
+                    💾 Guardar Cambios y Regenerar PDF
+                </button>
+                <a href="@Url.Action("Lista")" class="btn btn-secondary btn-lg px-4 ms-2">
+                    📋 Ver Órdenes
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+function agregarFila() {
+    const tbody = document.getElementById('productosBody');
+    const n     = tbody.rows.length + 1;
+    const tr    = document.createElement('tr');
+    tr.className = 'fila-producto';
+    tr.innerHTML = `
+        <td class="text-center numero-fila">${n}</td>
+        <td><input type="text"   class="form-control form-control-sm descripcion" placeholder="Descripción" /></td>
+        <td><input type="text"   class="form-control form-control-sm item" /></td>
+        <td><input type="text"   class="form-control form-control-sm catalogo" /></td>
+        <td><input type="text"   class="form-control form-control-sm modelo" /></td>
+        <td><input type="date"   class="form-control form-control-sm fecha-entrega" /></td>
+        <td><input type="number" class="form-control form-control-sm iva" value="19" min="0" max="100" step="0.1" onchange="calcularSubtotal(this)" /></td>
+        <td><input type="number" class="form-control form-control-sm cantidad" value="1" min="1" onchange="calcularSubtotal(this)" /></td>
+        <td><input type="text"   class="form-control form-control-sm um" value="UND" /></td>
+        <td><input type="number" class="form-control form-control-sm precio" value="0" min="0" step="0.01" onchange="calcularSubtotal(this)" /></td>
+        <td><input type="number" class="form-control form-control-sm descuento" value="0" min="0" max="100" step="0.1" onchange="calcularSubtotal(this)" /></td>
+        <td class="text-end fw-bold subtotal">$0.00</td>
+        <td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="eliminarFila(this)">✕</button></td>`;
+    tbody.appendChild(tr);
+    renumerarFilas();
+}
+
+function eliminarFila(btn) {
+    if (document.querySelectorAll('.fila-producto').length > 1) {
+        btn.closest('.fila-producto').remove();
+        renumerarFilas();
+        calcularTotal();
+    } else { alert('Debe haber al menos un producto.'); }
+}
+
+function renumerarFilas() {
+    document.querySelectorAll('.numero-fila').forEach((td, i) => td.textContent = i + 1);
+}
+
+function calcularSubtotal(input) {
+    const f   = input.closest('.fila-producto');
+    const sub = (parseFloat(f.querySelector('.cantidad').value)  || 0)
+              * (parseFloat(f.querySelector('.precio').value)    || 0)
+              * (1 - (parseFloat(f.querySelector('.descuento').value) || 0) / 100)
+              * (1 + (parseFloat(f.querySelector('.iva').value)       || 0) / 100);
+    f.querySelector('.subtotal').textContent = '$' + sub.toFixed(2);
+    calcularTotal();
+}
+
+function calcularTotal() {
+    let total = 0;
+    document.querySelectorAll('.fila-producto').forEach(f => {
+        total += (parseFloat(f.querySelector('.cantidad').value)  || 0)
+               * (parseFloat(f.querySelector('.precio').value)    || 0)
+               * (1 - (parseFloat(f.querySelector('.descuento').value) || 0) / 100)
+               * (1 + (parseFloat(f.querySelector('.iva').value)       || 0) / 100);
+    });
+    document.getElementById('totalGeneral').textContent = '$' + total.toFixed(2);
+}
+
+function guardarOrden() {
+    const idProveedor = document.getElementById('proveedorSelect').value;
+    if (!idProveedor) { alert('⚠️ Seleccione un proveedor'); return; }
+
+    const productos = [];
+    let hayError = false;
+
+    document.querySelectorAll('.fila-producto').forEach(f => {
+        const desc   = f.querySelector('.descripcion').value.trim();
+        const cant   = parseInt(f.querySelector('.cantidad').value)    || 0;
+        const precio = parseFloat(f.querySelector('.precio').value)    || 0;
+        if (!desc || cant <= 0 || precio <= 0) { hayError = true; return; }
+
+        productos.push({
+            NombreManual:   desc,
+            Descripcion:    desc,
+            Item:           f.querySelector('.item').value.trim(),
+            Catalogo:       f.querySelector('.catalogo').value.trim(),
+            Modelo:         f.querySelector('.modelo').value.trim(),
+            FechaEntrega:   f.querySelector('.fecha-entrega').value,
+            Iva:            parseFloat(f.querySelector('.iva').value)       || 0,
+            Cantidad:       cant,
+            Um:             f.querySelector('.um').value.trim() || 'UND',
+            PrecioUnitario: precio,
+            Descuento:      parseFloat(f.querySelector('.descuento').value) || 0
+        });
+    });
+
+    if (hayError || productos.length === 0) {
+        alert('⚠️ Complete Descripción, Cantidad y Precio en todos los productos');
+        return;
+    }
+
+    document.getElementById('datosOrden').value = JSON.stringify({
+        IdProveedor:     parseInt(idProveedor),
+        Condiciones:     document.getElementById('condiciones').value,
+        Moneda:          document.getElementById('moneda').value,
+        Comprador:       document.getElementById('comprador').value,
+        EntregarA:       document.getElementById('entregarA').value,
+        EntregarAlterno: document.getElementById('entregarAlterno').value,
+        Observaciones:   document.getElementById('observaciones').value,
+        Productos:       productos
+    });
+    document.getElementById('formOrden').submit();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    renumerarFilas();
+    calcularTotal();
+    document.querySelectorAll('.fila-producto').forEach(f => {
+        const inputs = f.querySelectorAll('.cantidad, .precio, .descuento, .iva');
+        inputs.forEach(inp => calcularSubtotal(inp));
+    });
+});
+</script>
+}
+
+<style>
+.table td, .table th { vertical-align: middle; }
+#tablaProductos input { font-size: 0.8rem; }
+</style>
