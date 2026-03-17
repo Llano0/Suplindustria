@@ -120,8 +120,15 @@ namespace ModuloWeb.MANAGER
 
                 ws.Cell(fila, 12).Style.NumberFormat.Format = "#,##0.00";
                 ws.Cell(fila, 14).Style.NumberFormat.Format = "#,##0.00";
+                // Centrado
                 ws.Cell(fila, 2).Style.Alignment.Horizontal  = XLAlignmentHorizontalValues.Center;
                 ws.Cell(fila, 10).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Cell(fila, 13).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                // Descripcion: wrap text para que no se salga
+                ws.Cell(fila, 7).Style.Alignment.WrapText = true;
+                ws.Cell(fila, 7).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                // Altura minima de fila
+                if (ws.Row(fila).Height < 30) ws.Row(fila).Height = 30;
 
                 AplicarBordesFila(ws, fila, COL_INICIO, COL_FIN);
             }

@@ -1,7 +1,3 @@
-@{
-    ViewData["Title"] = "Nueva Orden de Compra";
-}
-
 <div class="container-fluid mt-4 px-4">
     <div class="card shadow-lg p-4">
         <h2 class="text-center text-primary mb-4">📋 Nueva Orden de Compra</h2>
@@ -151,15 +147,6 @@
                         </tr>
                     </tfoot>
                 </table>
-            </div>
-
-            <!-- ════ OBSERVACIONES ════ -->
-            <div class="row mt-3 mb-3">
-                <div class="col-12">
-                    <label class="form-label fw-bold">Observaciones</label>
-                    <textarea id="observaciones" class="form-control" rows="2"
-                              placeholder="Ej: Entregar en horario de 8am a 5pm, contactar a Juan antes de despachar..."></textarea>
-                </div>
             </div>
 
             <div class="text-center mt-3">
@@ -326,14 +313,13 @@ function guardarOrden() {
     }
 
     document.getElementById('datosOrden').value = JSON.stringify({
-        IdProveedor:     parseInt(idProveedor),
-        Condiciones:     document.getElementById('condiciones').value,
-        Moneda:          document.getElementById('moneda').value,
-        Comprador:       document.getElementById('comprador').value,
-        EntregarA:       document.getElementById('entregarA').value,
+        IdProveedor:    parseInt(idProveedor),
+        Condiciones:    document.getElementById('condiciones').value,
+        Moneda:         document.getElementById('moneda').value,
+        Comprador:      document.getElementById('comprador').value,
+        EntregarA:      document.getElementById('entregarA').value,
         EntregarAlterno: document.getElementById('entregarAlterno').value,
-        Observaciones:   document.getElementById('observaciones').value,
-        Productos:       productos
+        Productos:      productos
     });
     document.getElementById('formOrden').submit();
 }

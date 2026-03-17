@@ -23,10 +23,17 @@ namespace ModuloWeb1.Controllers
 
         private string GenerarNumeroOrden(string nombreProveedor, int consecutivo)
         {
-            string primera = Regex.Split(nombreProveedor.Trim(), @"[\s_\-]+")[0];
-            primera = Regex.Replace(primera, @"[^a-zA-Z0-9]", "");
-            if (string.IsNullOrEmpty(primera)) primera = "ORD";
-            return $"{primera}-{consecutivo}";
+            // Tomar las 2 primeras palabras del nombre del proveedor
+            var palabras = Regex.Split(nombreProveedor.Trim(), @"[\s_\-]+")
+                               .Where(p => !string.IsNullOrWhiteSpace(p))
+                               .Take(2)
+                               .Select(p => Regex.Replace(p, @"[^a-zA-Z0-9]", ""))
+                               .Where(p => !string.IsNullOrEmpty(p))
+                               .ToArray();
+            string prefijo = palabras.Length > 0 ? string.Join("", palabras) : "ORD";
+            // Máximo 20 caracteres para el prefijo
+            if (prefijo.Length > 20) prefijo = prefijo.Substring(0, 20);
+            return $"{prefijo}-{consecutivo}";
         }
 
         private byte[] GenerarExcelBytes(int idOrden, string numeroOrden,
