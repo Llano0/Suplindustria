@@ -43,5 +43,7 @@ namespace ModuloWeb1.Models
         public string Direccion { get; set; } = "";
         public string Ciudad    { get; set; } = "";
         public string Contacto  { get; set; } = "";
+        public int Id { get; set; }
+        
     }
 }

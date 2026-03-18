@@ -328,6 +328,36 @@ namespace ModuloWeb1.Controllers
             catch (Exception ex) { return BadRequest(ex.Message); }
         }
 
+        // ── POST: Editar proveedor (AJAX) ────────────────────────────────────
+        [HttpPost]
+        public IActionResult EditarProveedor([FromBody] ProveedorViewModel vm)
+        {
+            try
+            {
+                if (vm.Id <= 0 || string.IsNullOrWhiteSpace(vm.Nombre))
+                    return BadRequest("ID y nombre son obligatorios");
+
+                var p = new Proveedor
+                {
+                    Id        = vm.Id,
+                    Nombre    = vm.Nombre.Trim(),
+                    Nit       = vm.Nit?.Trim()       ?? "",
+                    Correo    = vm.Correo?.Trim()     ?? "",
+                    Telefono  = vm.Telefono?.Trim()   ?? "",
+                    Direccion = vm.Direccion?.Trim()  ?? "",
+                    Ciudad    = vm.Ciudad?.Trim()     ?? "",
+                    Contacto  = vm.Contacto?.Trim()   ?? ""
+                };
+
+                broker.ActualizarProveedor(p);
+                return Ok(new {
+                    id=p.Id, nombre=p.Nombre, nit=p.Nit, direccion=p.Direccion,
+                    telefono=p.Telefono, ciudad=p.Ciudad, contacto=p.Contacto, correo=p.Correo
+                });
+            }
+            catch (Exception ex) { return BadRequest(ex.Message); }
+        }
+
         // ── POST: Eliminar proveedor (AJAX) ──────────────────────────────────
         [HttpPost]
         public IActionResult EliminarProveedor([FromBody] int id)

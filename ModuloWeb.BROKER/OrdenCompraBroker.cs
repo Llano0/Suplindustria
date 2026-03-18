@@ -36,6 +36,24 @@ namespace ModuloWeb.BROKER
             return Convert.ToInt32(cmd.ExecuteScalar());
         }
 
+        public void ActualizarProveedor(Proveedor p)
+        {
+            using var con = CrearConexion();
+            con.Open();
+            var cmd = new MySqlCommand(
+                "UPDATE proveedores SET nombre=@n, nit=@nit, correo=@c, telefono=@t, " +
+                "direccion=@d, ciudad=@ciu, contacto=@cont WHERE id=@id", con);
+            cmd.Parameters.AddWithValue("@n",    p.Nombre);
+            cmd.Parameters.AddWithValue("@nit",  p.Nit);
+            cmd.Parameters.AddWithValue("@c",    p.Correo);
+            cmd.Parameters.AddWithValue("@t",    p.Telefono);
+            cmd.Parameters.AddWithValue("@d",    p.Direccion);
+            cmd.Parameters.AddWithValue("@ciu",  p.Ciudad);
+            cmd.Parameters.AddWithValue("@cont", p.Contacto);
+            cmd.Parameters.AddWithValue("@id",   p.Id);
+            cmd.ExecuteNonQuery();
+        }
+
         public bool EliminarProveedor(int id)
         {
             using var con = CrearConexion();

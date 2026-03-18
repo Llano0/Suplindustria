@@ -1,3 +1,7 @@
+@{
+    ViewData["Title"] = "Nueva Orden de Compra";
+}
+
 <div class="container-fluid mt-4 px-4">
     <div class="card shadow-lg p-4">
         <h2 class="text-center text-primary mb-4">📋 Nueva Orden de Compra</h2>
@@ -59,6 +63,9 @@
                         <button type="button" class="btn btn-outline-primary"
                                 data-bs-toggle="modal" data-bs-target="#modalProveedor"
                                 title="Crear nuevo proveedor">＋</button>
+                        <button type="button" class="btn btn-outline-warning"
+                                onclick="abrirEditarProveedor()"
+                                title="Editar proveedor seleccionado">✏️</button>
                         <button type="button" class="btn btn-outline-danger"
                                 onclick="confirmarEliminarProveedor()"
                                 title="Eliminar proveedor seleccionado">🗑</button>
@@ -149,6 +156,15 @@
                 </table>
             </div>
 
+            <!-- ════ OBSERVACIONES ════ -->
+            <div class="row mt-3 mb-3">
+                <div class="col-12">
+                    <label class="form-label fw-bold">Observaciones</label>
+                    <textarea id="observaciones" class="form-control" rows="2"
+                              placeholder="Ej: Entregar en horario de 8am a 5pm, contactar a Juan antes de despachar..."></textarea>
+                </div>
+            </div>
+
             <div class="text-center mt-3">
                 <button type="button" class="btn btn-success btn-lg px-5" onclick="guardarOrden()">
                     💾 Generar Orden de Compra
@@ -158,6 +174,56 @@
                 </a>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- ════ MODAL: Editar Proveedor ════ -->
+<div class="modal fade" id="modalEditarProveedor" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">✏️ Editar Proveedor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="eId" />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Nombre / Razón Social *</label>
+                        <input type="text"  id="eNombre"    class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">NIT / CC</label>
+                        <input type="text"  id="eNit"       class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Correo</label>
+                        <input type="email" id="eCorreo"    class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Teléfono</label>
+                        <input type="text"  id="eTelefono"  class="form-control" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Dirección</label>
+                        <input type="text"  id="eDireccion" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Ciudad</label>
+                        <input type="text"  id="eCiudad"    class="form-control" />
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">Nombre de Contacto</label>
+                        <input type="text"  id="eContacto"  class="form-control" />
+                    </div>
+                </div>
+                <div id="modalEditarError" class="alert alert-danger mt-3 d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning"   onclick="guardarEdicionProveedor()">💾 Guardar Cambios</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -313,13 +379,14 @@ function guardarOrden() {
     }
 
     document.getElementById('datosOrden').value = JSON.stringify({
-        IdProveedor:    parseInt(idProveedor),
-        Condiciones:    document.getElementById('condiciones').value,
-        Moneda:         document.getElementById('moneda').value,
-        Comprador:      document.getElementById('comprador').value,
-        EntregarA:      document.getElementById('entregarA').value,
+        IdProveedor:     parseInt(idProveedor),
+        Condiciones:     document.getElementById('condiciones').value,
+        Moneda:          document.getElementById('moneda').value,
+        Comprador:       document.getElementById('comprador').value,
+        EntregarA:       document.getElementById('entregarA').value,
         EntregarAlterno: document.getElementById('entregarAlterno').value,
-        Productos:      productos
+        Observaciones:   document.getElementById('observaciones').value,
+        Productos:       productos
     });
     document.getElementById('formOrden').submit();
 }
@@ -369,6 +436,82 @@ function mostrarErrorModal(msg) {
     const el = document.getElementById('modalError');
     el.textContent = msg;
     el.classList.remove('d-none');
+}
+
+// ════ EDITAR PROVEEDOR ════
+
+function abrirEditarProveedor() {
+    const sel = document.getElementById('proveedorSelect');
+    const opt = sel.selectedOptions[0];
+    if (!opt?.value) { alert('Seleccione un proveedor primero'); return; }
+
+    document.getElementById('eId').value        = opt.value;
+    document.getElementById('eNombre').value    = opt.dataset.nombre    || '';
+    document.getElementById('eNit').value       = opt.dataset.nit       || '';
+    document.getElementById('eCorreo').value    = opt.dataset.correo    || '';
+    document.getElementById('eTelefono').value  = opt.dataset.telefono  || '';
+    document.getElementById('eDireccion').value = opt.dataset.direccion || '';
+    document.getElementById('eCiudad').value    = opt.dataset.ciudad    || '';
+    document.getElementById('eContacto').value  = opt.dataset.contacto  || '';
+    document.getElementById('modalEditarError').classList.add('d-none');
+
+    bootstrap.Modal.getOrCreateInstance(
+        document.getElementById('modalEditarProveedor')).show();
+}
+
+async function guardarEdicionProveedor() {
+    const nombre = document.getElementById('eNombre').value.trim();
+    if (!nombre) { 
+        const el = document.getElementById('modalEditarError');
+        el.textContent = 'El nombre es obligatorio';
+        el.classList.remove('d-none');
+        return; 
+    }
+
+    try {
+        const res = await fetch('@Url.Action("EditarProveedor")', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                Id:        parseInt(document.getElementById('eId').value),
+                Nombre:    nombre,
+                Nit:       document.getElementById('eNit').value.trim(),
+                Correo:    document.getElementById('eCorreo').value.trim(),
+                Telefono:  document.getElementById('eTelefono').value.trim(),
+                Direccion: document.getElementById('eDireccion').value.trim(),
+                Ciudad:    document.getElementById('eCiudad').value.trim(),
+                Contacto:  document.getElementById('eContacto').value.trim()
+            })
+        });
+        if (!res.ok) { 
+            const el = document.getElementById('modalEditarError');
+            el.textContent = await res.text();
+            el.classList.remove('d-none');
+            return; 
+        }
+
+        const prov = await res.json();
+        // Actualizar el option en el select
+        const sel = document.getElementById('proveedorSelect');
+        const opt = sel.querySelector(`option[value="${prov.id}"]`);
+        if (opt) {
+            opt.text = prov.nombre;
+            Object.assign(opt.dataset, {
+                nombre: prov.nombre, nit: prov.nit, direccion: prov.direccion,
+                telefono: prov.telefono, ciudad: prov.ciudad,
+                contacto: prov.contacto, correo: prov.correo
+            });
+            sel.dispatchEvent(new Event('change'));
+        }
+
+        bootstrap.Modal.getInstance(
+            document.getElementById('modalEditarProveedor')).hide();
+        alert(`✅ Proveedor "${prov.nombre}" actualizado.`);
+    } catch(e) { 
+        const el = document.getElementById('modalEditarError');
+        el.textContent = 'Error: ' + e.message;
+        el.classList.remove('d-none');
+    }
 }
 
 // ════ ELIMINAR PROVEEDOR ════
