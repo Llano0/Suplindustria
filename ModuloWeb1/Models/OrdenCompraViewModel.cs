@@ -1,19 +1,20 @@
 namespace ModuloWeb1.Models
 {
     public class OrdenCompraViewModel
-    {
-        public int IdProveedor { get; set; }
+{
+    public int IdProveedor { get; set; }
 
-        // Cabezal de la orden
-        public string Condiciones   { get; set; } = "30 días";
-        public string Moneda        { get; set; } = "COP";
-        public string Comprador     { get; set; } = "";
-        public string EntregarA     { get; set; } = "SUPLINDUSTRIA S.A.S.";
-        public string EntregarAlterno { get; set; } = "NA";
-        public string Observaciones { get; set; } = "";
+    // Cabezal de la orden
+    public string Condiciones     { get; set; } = "30 días";
+    public string Moneda          { get; set; } = "COP";
+    public string Comprador       { get; set; } = "";
+    public string EntregarA       { get; set; } = "SUPLINDUSTRIA S.A.S.";
+    public string EntregarAlterno { get; set; } = "NA";
+    public string Observaciones   { get; set; } = "";
+    public string PrefijoOrden    { get; set; } = "";   // ← aquí
 
-        public List<DetalleProductoViewModel> Productos { get; set; } = new();
-    }
+    public List<DetalleProductoViewModel> Productos { get; set; } = new();
+}
 
     public class DetalleProductoViewModel
     {
@@ -36,6 +37,7 @@ namespace ModuloWeb1.Models
     // Para crear un proveedor nuevo desde el formulario
     public class ProveedorViewModel
     {
+        public int    Id        { get; set; }
         public string Nombre    { get; set; } = "";
         public string Nit       { get; set; } = "";
         public string Correo    { get; set; } = "";
@@ -43,7 +45,6 @@ namespace ModuloWeb1.Models
         public string Direccion { get; set; } = "";
         public string Ciudad    { get; set; } = "";
         public string Contacto  { get; set; } = "";
-        public int Id { get; set; }
-        
+        public string Prefijo   { get; set; } = "";
     }
 }

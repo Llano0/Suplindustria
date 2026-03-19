@@ -51,7 +51,7 @@ namespace ModuloWeb.MANAGER
 
             FixImageSize(wb);
             LlenarInstancia(wb, idOrden, numeroOrden, proveedor, fecha, cabezal);
-            LlenarProductos(wb, detalles, cabezal.Observaciones);
+            int ultimaFila = LlenarProductos(wb, detalles, cabezal.Observaciones);
 
             foreach (var hoja in wb.Worksheets)
                 if (hoja.Name != "Hoja1")
@@ -91,7 +91,7 @@ namespace ModuloWeb.MANAGER
             ws.Cell("P2").Value = cab.Comprador;
         }
 
-        private void LlenarProductos(XLWorkbook wb, List<DetalleExcelDto> detalles, string observaciones)
+        private int LlenarProductos(XLWorkbook wb, List<DetalleExcelDto> detalles, string observaciones)
         {
             var ws = wb.Worksheet("Hoja1");
             const int FILA_BASE  = 19;
@@ -136,11 +136,10 @@ namespace ModuloWeb.MANAGER
             // Fila TOTAL
             int filaTot = FILA_BASE + detalles.Count;
 
-            // ── Fila inferior: Observaciones | Firma y sello | TOTAL ──
-            // Altura de la fila
+            // ── Fila inferior: Observaciones | Firma y sello | bloque totales ──
             ws.Row(filaTot).Height = 50;
 
-            // Sección 1: Observaciones (B hasta G)
+            // Observaciones (B-G)
             var rangoObs = ws.Range(filaTot, COL_INICIO, filaTot, 7);
             rangoObs.Merge();
             rangoObs.Style.Alignment.WrapText = true;
@@ -152,7 +151,7 @@ namespace ModuloWeb.MANAGER
                     : $"Observaciones: {observaciones}";
             ws.Cell(filaTot, COL_INICIO).Style.Font.Italic = true;
 
-            // Sección 2: Firma y sello (H hasta J)
+            // Firma y sello (H-J)
             var rangoFirma = ws.Range(filaTot, 8, filaTot, 10);
             rangoFirma.Merge();
             rangoFirma.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -161,16 +160,58 @@ namespace ModuloWeb.MANAGER
             ws.Cell(filaTot, 8).Value = "Firma y sello";
             ws.Cell(filaTot, 8).Style.Font.Bold = true;
 
-            // TOTAL a la derecha (M y N)
-            ws.Cell(filaTot, 13).Value = "TOTAL:";
-            ws.Cell(filaTot, 13).Style.Font.Bold = true;
-            ws.Cell(filaTot, 14).FormulaA1 = $"=SUM(N{FILA_BASE}:N{filaTot - 1})";
-            ws.Cell(filaTot, 14).Style.NumberFormat.Format = "#,##0.00";
-            ws.Cell(filaTot, 14).Style.Font.Bold = true;
+            // ── Bloque Subtotal / Descuento / IVA / Total (columnas K-N) ──
+            // Calcular valores
+            decimal subtotalVal = detalles.Sum(d =>
+                d.Cantidad * d.PrecioUnitario * (1 - d.Descuento / 100));
+            decimal ivaVal = detalles.Sum(d =>
+                d.Cantidad * d.PrecioUnitario * (1 - d.Descuento / 100) * (d.Iva / 100));
+            decimal totalVal = subtotalVal + ivaVal;
+
+            int filaBloque = filaTot;
+            // Subtotal
+            var rSub = ws.Range(filaBloque, 11, filaBloque, 12); rSub.Merge();
+            rSub.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            ws.Cell(filaBloque, 11).Value = "Subtotal";
+            ws.Cell(filaBloque, 11).Style.Font.Bold = true;
+            ws.Cell(filaBloque, 13).Value = "$";
+            ws.Cell(filaBloque, 14).Value = subtotalVal;
+            ws.Cell(filaBloque, 14).Style.NumberFormat.Format = "#,##0.00";
+            ws.Cell(filaBloque, 13).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            ws.Cell(filaBloque, 14).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            filaBloque++;
+            ws.Row(filaBloque).Height = 15;
+            // IVA
+            var rIva = ws.Range(filaBloque, 11, filaBloque, 12); rIva.Merge();
+            rIva.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            ws.Cell(filaBloque, 11).Value = "IVA:";
+            ws.Cell(filaBloque, 11).Style.Font.Bold = true;
+            ws.Cell(filaBloque, 13).Value = "$";
+            ws.Cell(filaBloque, 14).Value = ivaVal;
+            ws.Cell(filaBloque, 14).Style.NumberFormat.Format = "#,##0.00";
+            ws.Cell(filaBloque, 13).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            ws.Cell(filaBloque, 14).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            filaBloque++;
+            ws.Row(filaBloque).Height = 15;
+            // Total
+            var rTot = ws.Range(filaBloque, 11, filaBloque, 12); rTot.Merge();
+            rTot.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            ws.Cell(filaBloque, 11).Value = "Total:";
+            ws.Cell(filaBloque, 11).Style.Font.Bold = true;
+            ws.Cell(filaBloque, 13).Value = "$";
+            ws.Cell(filaBloque, 14).Value = totalVal;
+            ws.Cell(filaBloque, 14).Style.NumberFormat.Format = "#,##0.00";
+            ws.Cell(filaBloque, 14).Style.Font.Bold = true;
+            ws.Cell(filaBloque, 13).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            ws.Cell(filaBloque, 14).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
 
             // Borde tabla completa
             var rangoTabla = ws.Range(18, COL_INICIO, filaTot, COL_FIN);
             rangoTabla.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+
+            return filaBloque; // última fila con contenido
         }
 
         private static void AplicarBordesFila(IXLWorksheet ws, int fila, int colIni, int colFin)

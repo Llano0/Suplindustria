@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ModuloWeb.MANAGER")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6fd459bba91c1727399a43a54529b3a4fcf46094")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2a4837461c50f5410d1ba3656e34e538a5f02a56")]
 [assembly: System.Reflection.AssemblyProductAttribute("ModuloWeb.MANAGER")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ModuloWeb.MANAGER")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

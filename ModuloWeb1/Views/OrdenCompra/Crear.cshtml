@@ -83,7 +83,7 @@
                     <label class="form-label fw-bold">Comprador</label>
                     <input type="text" id="comprador" class="form-control" placeholder="Nombre del comprador" />
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-8">
                     <label class="form-label fw-bold">Entregar a (principal)</label>
                     <input type="text" id="entregarA" class="form-control" value="SUPLINDUSTRIA S.A.S." />
                 </div>
@@ -212,9 +212,16 @@
                         <label class="form-label fw-bold">Ciudad</label>
                         <input type="text"  id="eCiudad"    class="form-control" />
                     </div>
-                    <div class="col-md-12">
+                            <div class="col-md-8">
                         <label class="form-label fw-bold">Nombre de Contacto</label>
                         <input type="text"  id="eContacto"  class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Prefijo de orden</label>
+                        <div class="input-group">
+                            <input type="text" id="ePrefijo" class="form-control" maxlength="20" />
+                            <span class="input-group-text">-#</span>
+                        </div>
                     </div>
                 </div>
                 <div id="modalEditarError" class="alert alert-danger mt-3 d-none"></div>
@@ -261,9 +268,17 @@
                         <label class="form-label fw-bold">Ciudad</label>
                         <input type="text"  id="pCiudad"    class="form-control" placeholder="Ej: Medellín" />
                     </div>
-                    <div class="col-md-12">
+                    <div class="col-md-8">
                         <label class="form-label fw-bold">Nombre de Contacto</label>
                         <input type="text"  id="pContacto"  class="form-control" placeholder="Ej: Juan Pérez" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Prefijo de orden</label>
+                        <div class="input-group">
+                            <input type="text" id="pPrefijo" class="form-control" placeholder="Ej: ABB" maxlength="20" />
+                            <span class="input-group-text">-0</span>
+                        </div>
+                        <small class="text-muted">Ej: ABB-0, ABB-1...</small>
                     </div>
                 </div>
                 <div id="modalError" class="alert alert-danger mt-3 d-none"></div>
@@ -386,6 +401,7 @@ function guardarOrden() {
         EntregarA:       document.getElementById('entregarA').value,
         EntregarAlterno: document.getElementById('entregarAlterno').value,
         Observaciones:   document.getElementById('observaciones').value,
+
         Productos:       productos
     });
     document.getElementById('formOrden').submit();
@@ -408,7 +424,8 @@ async function guardarProveedor() {
                 Telefono:  document.getElementById('pTelefono').value.trim(),
                 Direccion: document.getElementById('pDireccion').value.trim(),
                 Ciudad:    document.getElementById('pCiudad').value.trim(),
-                Contacto:  document.getElementById('pContacto').value.trim()
+                Contacto:  document.getElementById('pContacto').value.trim(),
+                Prefijo:   document.getElementById('pPrefijo').value.trim()
             })
         });
         if (!res.ok) { mostrarErrorModal(await res.text()); return; }
@@ -419,13 +436,13 @@ async function guardarProveedor() {
         Object.assign(opt.dataset, {
             nombre: prov.nombre, nit: prov.nit, direccion: prov.direccion,
             telefono: prov.telefono, ciudad: prov.ciudad,
-            contacto: prov.contacto, correo: prov.correo
+            contacto: prov.contacto, correo: prov.correo, prefijo: prov.prefijo || ''
         });
         sel.add(opt);
         sel.value = prov.id;
         sel.dispatchEvent(new Event('change'));
 
-        ['pNombre','pNit','pCorreo','pTelefono','pDireccion','pCiudad','pContacto']
+        ['pNombre','pNit','pCorreo','pTelefono','pDireccion','pCiudad','pContacto','pPrefijo']
             .forEach(id => document.getElementById(id).value = '');
         document.getElementById('modalError').classList.add('d-none');
         bootstrap.Modal.getInstance(document.getElementById('modalProveedor')).hide();
@@ -453,6 +470,7 @@ function abrirEditarProveedor() {
     document.getElementById('eDireccion').value = opt.dataset.direccion || '';
     document.getElementById('eCiudad').value    = opt.dataset.ciudad    || '';
     document.getElementById('eContacto').value  = opt.dataset.contacto  || '';
+    document.getElementById('ePrefijo').value   = opt.dataset.prefijo    || '';
     document.getElementById('modalEditarError').classList.add('d-none');
 
     bootstrap.Modal.getOrCreateInstance(
@@ -480,7 +498,8 @@ async function guardarEdicionProveedor() {
                 Telefono:  document.getElementById('eTelefono').value.trim(),
                 Direccion: document.getElementById('eDireccion').value.trim(),
                 Ciudad:    document.getElementById('eCiudad').value.trim(),
-                Contacto:  document.getElementById('eContacto').value.trim()
+                Contacto:  document.getElementById('eContacto').value.trim(),
+                Prefijo:   document.getElementById('ePrefijo').value.trim()
             })
         });
         if (!res.ok) { 
@@ -499,7 +518,7 @@ async function guardarEdicionProveedor() {
             Object.assign(opt.dataset, {
                 nombre: prov.nombre, nit: prov.nit, direccion: prov.direccion,
                 telefono: prov.telefono, ciudad: prov.ciudad,
-                contacto: prov.contacto, correo: prov.correo
+                contacto: prov.contacto, correo: prov.correo, prefijo: prov.prefijo || ''
             });
             sel.dispatchEvent(new Event('change'));
         }
@@ -538,7 +557,20 @@ async function confirmarEliminarProveedor() {
     } catch(e) { alert('Error: ' + e.message); }
 }
 
-document.addEventListener('DOMContentLoaded', calcularTotal);
+document.addEventListener('DOMContentLoaded', () => {
+    calcularTotal();
+    actualizarPreviewOrden();
+    document.getElementById('prefijoOrden').addEventListener('input', actualizarPreviewOrden);
+    document.getElementById('proveedorSelect').addEventListener('change', actualizarPreviewOrden);
+});
+
+function actualizarPreviewOrden() {
+    const prefijo = document.getElementById('prefijoOrden').value.trim();
+    const sel = document.getElementById('proveedorSelect');
+    const nomProv = sel.selectedOptions[0]?.dataset.nombre || '';
+    const texto = prefijo || (nomProv.split(/[\s_-]+/).slice(0,2).join('')) || 'ORD';
+    document.getElementById('previewNumOrden').textContent = texto + '-#';
+}
 </script>
 }
 

@@ -21,17 +21,24 @@ namespace ModuloWeb1.Controllers
 
         // ── Helpers ──────────────────────────────────────────────────────────
 
-        private string GenerarNumeroOrden(string nombreProveedor, int consecutivo)
+        private string GenerarNumeroOrden(Proveedor proveedor, int consecutivo)
         {
-            // Tomar las 2 primeras palabras del nombre del proveedor
-            var palabras = Regex.Split(nombreProveedor.Trim(), @"[\s_\-]+")
-                               .Where(p => !string.IsNullOrWhiteSpace(p))
-                               .Take(2)
-                               .Select(p => Regex.Replace(p, @"[^a-zA-Z0-9]", ""))
-                               .Where(p => !string.IsNullOrEmpty(p))
-                               .ToArray();
-            string prefijo = palabras.Length > 0 ? string.Join("", palabras) : "ORD";
-            // Máximo 20 caracteres para el prefijo
+            // Usar prefijo del proveedor si tiene, sino 2 primeras palabras del nombre
+            string prefijo;
+            if (!string.IsNullOrWhiteSpace(proveedor.Prefijo))
+            {
+                prefijo = proveedor.Prefijo.Trim();
+            }
+            else
+            {
+                var palabras = Regex.Split(proveedor.Nombre.Trim(), @"[\s_\-]+")
+                                   .Where(p => !string.IsNullOrWhiteSpace(p))
+                                   .Take(2)
+                                   .Select(p => Regex.Replace(p, @"[^a-zA-Z0-9]", ""))
+                                   .Where(p => !string.IsNullOrEmpty(p))
+                                   .ToArray();
+                prefijo = palabras.Length > 0 ? string.Join("", palabras) : "ORD";
+            }
             if (prefijo.Length > 20) prefijo = prefijo.Substring(0, 20);
             return $"{prefijo}-{consecutivo}";
         }
@@ -114,10 +121,10 @@ namespace ModuloWeb1.Controllers
                               * (1 - p.Descuento / 100)
                               * (1 + p.Iva / 100));
 
-                int consecutivo = broker.ContarOrdenesPorProveedor(model.IdProveedor);
-                var proveedor   = broker.ObtenerProveedorPorId(model.IdProveedor)
+                var proveedor = broker.ObtenerProveedorPorId(model.IdProveedor)
                     ?? new Proveedor { Nombre = "SinProveedor" };
-                string numeroOrden = GenerarNumeroOrden(proveedor.Nombre, consecutivo);
+                int consecutivo    = broker.ObtenerYIncrementarConsecutivo(model.IdProveedor);
+                string numeroOrden = GenerarNumeroOrden(proveedor, consecutivo);
 
                 // Guardar orden
                 int idOrden = broker.InsertarOrden(
@@ -316,13 +323,15 @@ namespace ModuloWeb1.Controllers
                     Telefono  = vm.Telefono?.Trim()   ?? "",
                     Direccion = vm.Direccion?.Trim()  ?? "",
                     Ciudad    = vm.Ciudad?.Trim()     ?? "",
-                    Contacto  = vm.Contacto?.Trim()   ?? ""
+                    Contacto  = vm.Contacto?.Trim()   ?? "",
+                    Prefijo   = vm.Prefijo?.Trim()    ?? ""
                 };
 
                 int newId = broker.InsertarProveedor(p);
                 return Ok(new {
                     id=newId, nombre=p.Nombre, nit=p.Nit, direccion=p.Direccion,
-                    telefono=p.Telefono, ciudad=p.Ciudad, contacto=p.Contacto, correo=p.Correo
+                    telefono=p.Telefono, ciudad=p.Ciudad, contacto=p.Contacto,
+                    correo=p.Correo, prefijo=p.Prefijo
                 });
             }
             catch (Exception ex) { return BadRequest(ex.Message); }
@@ -346,13 +355,15 @@ namespace ModuloWeb1.Controllers
                     Telefono  = vm.Telefono?.Trim()   ?? "",
                     Direccion = vm.Direccion?.Trim()  ?? "",
                     Ciudad    = vm.Ciudad?.Trim()     ?? "",
-                    Contacto  = vm.Contacto?.Trim()   ?? ""
+                    Contacto  = vm.Contacto?.Trim()   ?? "",
+                    Prefijo   = vm.Prefijo?.Trim()    ?? ""
                 };
 
                 broker.ActualizarProveedor(p);
                 return Ok(new {
                     id=p.Id, nombre=p.Nombre, nit=p.Nit, direccion=p.Direccion,
-                    telefono=p.Telefono, ciudad=p.Ciudad, contacto=p.Contacto, correo=p.Correo
+                    telefono=p.Telefono, ciudad=p.Ciudad, contacto=p.Contacto,
+                    correo=p.Correo, prefijo=p.Prefijo
                 });
             }
             catch (Exception ex) { return BadRequest(ex.Message); }

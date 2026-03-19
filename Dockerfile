@@ -8,6 +8,7 @@ ENV ASPNETCORE_URLS=http://+:8080
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice \
     libreoffice-writer \
+    ghostscript \
     fonts-liberation \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 

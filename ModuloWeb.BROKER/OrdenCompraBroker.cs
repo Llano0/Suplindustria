@@ -24,8 +24,8 @@ namespace ModuloWeb.BROKER
             using var con = CrearConexion();
             con.Open();
             var cmd = new MySqlCommand(
-                "INSERT INTO proveedores (nombre, nit, correo, telefono, direccion, ciudad, contacto) " +
-                "VALUES (@n,@nit,@c,@t,@d,@ciu,@cont); SELECT LAST_INSERT_ID();", con);
+                "INSERT INTO proveedores (nombre, nit, correo, telefono, direccion, ciudad, contacto, prefijo, consecutivo) " +
+                "VALUES (@n,@nit,@c,@t,@d,@ciu,@cont,@pref,0); SELECT LAST_INSERT_ID();", con);
             cmd.Parameters.AddWithValue("@n",    p.Nombre);
             cmd.Parameters.AddWithValue("@nit",  p.Nit);
             cmd.Parameters.AddWithValue("@c",    p.Correo);
@@ -33,6 +33,7 @@ namespace ModuloWeb.BROKER
             cmd.Parameters.AddWithValue("@d",    p.Direccion);
             cmd.Parameters.AddWithValue("@ciu",  p.Ciudad);
             cmd.Parameters.AddWithValue("@cont", p.Contacto);
+            cmd.Parameters.AddWithValue("@pref", p.Prefijo);
             return Convert.ToInt32(cmd.ExecuteScalar());
         }
 
@@ -42,7 +43,7 @@ namespace ModuloWeb.BROKER
             con.Open();
             var cmd = new MySqlCommand(
                 "UPDATE proveedores SET nombre=@n, nit=@nit, correo=@c, telefono=@t, " +
-                "direccion=@d, ciudad=@ciu, contacto=@cont WHERE id=@id", con);
+                "direccion=@d, ciudad=@ciu, contacto=@cont, prefijo=@pref WHERE id=@id", con);
             cmd.Parameters.AddWithValue("@n",    p.Nombre);
             cmd.Parameters.AddWithValue("@nit",  p.Nit);
             cmd.Parameters.AddWithValue("@c",    p.Correo);
@@ -50,6 +51,7 @@ namespace ModuloWeb.BROKER
             cmd.Parameters.AddWithValue("@d",    p.Direccion);
             cmd.Parameters.AddWithValue("@ciu",  p.Ciudad);
             cmd.Parameters.AddWithValue("@cont", p.Contacto);
+            cmd.Parameters.AddWithValue("@pref", p.Prefijo);
             cmd.Parameters.AddWithValue("@id",   p.Id);
             cmd.ExecuteNonQuery();
         }
@@ -77,7 +79,8 @@ namespace ModuloWeb.BROKER
             con.Open();
             var cmd = new MySqlCommand(
                 "SELECT id, nombre, nit, correo, telefono, direccion, " +
-                "IFNULL(ciudad,'') AS ciudad, IFNULL(contacto,'') AS contacto " +
+                "IFNULL(ciudad,'') AS ciudad, IFNULL(contacto,'') AS contacto, " +
+                "IFNULL(prefijo,'') AS prefijo, IFNULL(consecutivo,0) AS consecutivo " +
                 "FROM proveedores ORDER BY nombre", con);
             using var reader = cmd.ExecuteReader();
             while (reader.Read()) lista.Add(MapProveedor(reader));
@@ -90,7 +93,8 @@ namespace ModuloWeb.BROKER
             con.Open();
             var cmd = new MySqlCommand(
                 "SELECT id, nombre, nit, correo, telefono, direccion, " +
-                "IFNULL(ciudad,'') AS ciudad, IFNULL(contacto,'') AS contacto " +
+                "IFNULL(ciudad,'') AS ciudad, IFNULL(contacto,'') AS contacto, " +
+                "IFNULL(prefijo,'') AS prefijo, IFNULL(consecutivo,0) AS consecutivo " +
                 "FROM proveedores WHERE id = @id", con);
             cmd.Parameters.AddWithValue("@id", id);
             using var reader = cmd.ExecuteReader();
@@ -99,28 +103,38 @@ namespace ModuloWeb.BROKER
 
         private Proveedor MapProveedor(MySqlDataReader r) => new Proveedor
         {
-            Id        = r.GetInt32("id"),
-            Nombre    = r.GetString("nombre"),
-            Nit       = r["nit"] != DBNull.Value ? r.GetString("nit") : "",
-            Correo    = r.GetString("correo"),
-            Telefono  = r["telefono"] != DBNull.Value ? r.GetString("telefono") : "",
-            Direccion = r["direccion"] != DBNull.Value ? r.GetString("direccion") : "",
-            Ciudad    = r.GetString("ciudad"),
-            Contacto  = r.GetString("contacto")
+            Id          = r.GetInt32("id"),
+            Nombre      = r.GetString("nombre"),
+            Nit         = r["nit"] != DBNull.Value ? r.GetString("nit") : "",
+            Correo      = r.GetString("correo"),
+            Telefono    = r["telefono"] != DBNull.Value ? r.GetString("telefono") : "",
+            Direccion   = r["direccion"] != DBNull.Value ? r.GetString("direccion") : "",
+            Ciudad      = r.GetString("ciudad"),
+            Contacto    = r.GetString("contacto"),
+            Prefijo     = r.GetString("prefijo"),
+            Consecutivo = r.GetInt32("consecutivo")
         };
 
         // ══════════════════════════════════════════════════════
         //  ÓRDENES
         // ══════════════════════════════════════════════════════
 
-        public int ContarOrdenesPorProveedor(int idProveedor)
+        /// Obtiene el consecutivo actual y lo incrementa en 1 atomicamente
+        public int ObtenerYIncrementarConsecutivo(int idProveedor)
         {
             using var con = CrearConexion();
             con.Open();
-            var cmd = new MySqlCommand(
-                "SELECT COUNT(*) FROM ordenes_compra WHERE id_proveedor = @id", con);
-            cmd.Parameters.AddWithValue("@id", idProveedor);
-            return Convert.ToInt32(cmd.ExecuteScalar());
+            // Leer consecutivo actual
+            var cmdGet = new MySqlCommand(
+                "SELECT IFNULL(consecutivo,0) FROM proveedores WHERE id=@id", con);
+            cmdGet.Parameters.AddWithValue("@id", idProveedor);
+            int actual = Convert.ToInt32(cmdGet.ExecuteScalar());
+            // Incrementar
+            var cmdUp = new MySqlCommand(
+                "UPDATE proveedores SET consecutivo = consecutivo + 1 WHERE id=@id", con);
+            cmdUp.Parameters.AddWithValue("@id", idProveedor);
+            cmdUp.ExecuteNonQuery();
+            return actual;
         }
 
         public void GuardarNumeroOrden(int idOrden, string numeroOrden)
