@@ -1,18 +1,19 @@
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
 using Google.Apis.Upload;
+using Google.Apis.Util.Store;
+using Newtonsoft.Json;
+using System.Text;
 
 namespace ModuloWeb.MANAGER
 {
-    /// <summary>
-    /// Sube archivos a Google Drive usando cuenta de servicio — nunca expira.
-    /// </summary>
     public class GoogleDriveService
     {
         private const string FOLDER_ID = "1aTN1zSyKDh2_9f37Ytx8mpBX0mWs8qgS";
-        private static readonly string[] Scopes = { DriveService.ScopeConstants.Drive };
-
+        private static readonly string[] Scopes = { DriveService.ScopeConstants.DriveFile };
         private readonly string _rutaCredenciales;
 
         public GoogleDriveService(string rutaCredenciales)
@@ -22,31 +23,58 @@ namespace ModuloWeb.MANAGER
 
         public async Task<string> SubirPdfAsync(string rutaPdf, string nombreArchivo)
         {
-            // Leer JSON desde variable de entorno (Railway) o archivo local
-            string? jsonContent = Environment.GetEnvironmentVariable("GOOGLE_SERVICE_ACCOUNT_JSON");
+            string oauthJson = Environment.GetEnvironmentVariable("GOOGLE_OAUTH_JSON")
+                ?? (File.Exists(_rutaCredenciales) ? File.ReadAllText(_rutaCredenciales) : null)
+                ?? throw new Exception("No se encontró GOOGLE_OAUTH_JSON.");
 
-            GoogleCredential credential;
-
-            if (!string.IsNullOrWhiteSpace(jsonContent))
+            string? tokenJson = Environment.GetEnvironmentVariable("GOOGLE_TOKEN_JSON");
+            if (string.IsNullOrWhiteSpace(tokenJson))
             {
-                using var stream = new MemoryStream(
-                    System.Text.Encoding.UTF8.GetBytes(jsonContent));
-                credential = GoogleCredential
-                    .FromStream(stream)
-                    .CreateScoped(Scopes);
+                string tokenPath = System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(_rutaCredenciales)!,
+                    "token_drive",
+                    "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user");
+                if (File.Exists(tokenPath))
+                    tokenJson = File.ReadAllText(tokenPath);
             }
-            else if (File.Exists(_rutaCredenciales))
+
+            UserCredential credential;
+
+            if (string.IsNullOrWhiteSpace(tokenJson))
             {
-                using var stream = new FileStream(
-                    _rutaCredenciales, FileMode.Open, FileAccess.Read);
-                credential = GoogleCredential
-                    .FromStream(stream)
-                    .CreateScoped(Scopes);
+                // Sin token → abrir navegador para autorizar
+                string tokenDir = System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(_rutaCredenciales)!, "token_drive");
+                using var streamAuth = new MemoryStream(
+                    Encoding.UTF8.GetBytes(oauthJson));
+                credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+                    GoogleClientSecrets.FromStream(streamAuth).Secrets,
+                    Scopes, "user", CancellationToken.None,
+                    new FileDataStore(tokenDir, true));
             }
             else
             {
-                throw new FileNotFoundException(
-                    $"Credenciales no encontradas. Configura GOOGLE_SERVICE_ACCOUNT_JSON en Railway.");
+                dynamic oauthData = JsonConvert.DeserializeObject(oauthJson)!;
+                string clientId     = (string)oauthData.installed.client_id;
+                string clientSecret = (string)oauthData.installed.client_secret;
+
+                var tokenResponse = JsonConvert.DeserializeObject<TokenResponse>(tokenJson)!;
+                var flow = new GoogleAuthorizationCodeFlow(
+                    new GoogleAuthorizationCodeFlow.Initializer
+                    {
+                        ClientSecrets = new ClientSecrets
+                        {
+                            ClientId     = clientId,
+                            ClientSecret = clientSecret
+                        },
+                        Scopes = Scopes
+                    });
+
+                credential = new UserCredential(flow, "user", tokenResponse);
+                await credential.RefreshTokenAsync(CancellationToken.None);
+
+                // Guardar token actualizado en Railway
+                await GuardarTokenEnRailway(credential.Token);
             }
 
             var service = new DriveService(new BaseClientService.Initializer
@@ -70,6 +98,46 @@ namespace ModuloWeb.MANAGER
                 throw new Exception($"Error subiendo a Drive: {resultado.Exception?.Message}");
 
             return request.ResponseBody?.WebViewLink ?? "";
+        }
+
+        private static async Task GuardarTokenEnRailway(TokenResponse token)
+        {
+            try
+            {
+                string? railwayToken  = Environment.GetEnvironmentVariable("RAILWAY_TOKEN");
+                string? serviceId     = Environment.GetEnvironmentVariable("RAILWAY_SERVICE_ID");
+                string? environmentId = Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT_ID");
+                string? projectId     = Environment.GetEnvironmentVariable("RAILWAY_PROJECT_ID");
+
+                if (string.IsNullOrEmpty(railwayToken)) return;
+
+                string tokenJson = JsonConvert.SerializeObject(token);
+                var query = new
+                {
+                    query = @"mutation($input: VariableUpsertInput!) {
+                        variableUpsert(input: $input)
+                    }",
+                    variables = new
+                    {
+                        input = new
+                        {
+                            projectId,
+                            environmentId,
+                            serviceId,
+                            name  = "GOOGLE_TOKEN_JSON",
+                            value = tokenJson
+                        }
+                    }
+                };
+
+                using var http = new HttpClient();
+                http.DefaultRequestHeaders.Add("Authorization", $"Bearer {railwayToken}");
+                var content = new StringContent(
+                    JsonConvert.SerializeObject(query),
+                    Encoding.UTF8, "application/json");
+                await http.PostAsync("https://backboard.railway.app/graphql/v2", content);
+            }
+            catch { }
         }
     }
 }
