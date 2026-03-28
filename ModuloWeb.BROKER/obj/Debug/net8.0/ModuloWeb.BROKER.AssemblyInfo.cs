@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ModuloWeb.BROKER")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1086f26e21ba071188234c6a0a66386d3ae95877")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2a095d51ae9499ef182c0cd5ec705da34c735948")]
 [assembly: System.Reflection.AssemblyProductAttribute("ModuloWeb.BROKER")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ModuloWeb.BROKER")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
